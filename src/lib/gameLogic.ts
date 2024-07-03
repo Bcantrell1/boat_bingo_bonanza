@@ -14,28 +14,28 @@ export function generateCard(): BingoItem[] {
   return shuffled.slice(0, 25).map(text => ({ text, isMarked: false }));
 }
 
-export function checkWin(card: BingoItem[]): boolean {
+export function checkWin(card: BingoItem[], playerId: string): boolean {
   // Check rows
   for (let i = 0; i < 5; i++) {
-    if (card.slice(i*5, (i+1)*5).every(item => item.isMarked)) {
+    if (card.slice(i*5, (i+1)*5).every(item => item.isMarked && item.markedBy === playerId)) {
       return true;
     }
   }
 
   // Check columns
   for (let i = 0; i < 5; i++) {
-    if ([0,1,2,3,4].every(j => card[i + j*5].isMarked)) {
+    if ([0,1,2,3,4].every(j => card[i + j*5].isMarked && card[i + j*5].markedBy === playerId)) {
       return true;
     }
   }
 
   // Check main diagonal (top-left to bottom-right)
-  if ([0,6,12,18,24].every(i => card[i].isMarked)) {
+  if ([0,6,12,18,24].every(i => card[i].isMarked && card[i].markedBy === playerId)) {
     return true;
   }
 
   // Check secondary diagonal (top-right to bottom-left)
-  if ([4,8,12,16,20].every(i => card[i].isMarked)) {
+  if ([4,8,12,16,20].every(i => card[i].isMarked && card[i].markedBy === playerId)) {
     return true;
   }
 

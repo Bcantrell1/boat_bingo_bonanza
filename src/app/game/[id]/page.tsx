@@ -1,6 +1,7 @@
 'use client';
 
 import BingoCard from '@/components/BingoCard';
+import PlayerList from '@/components/PlayerList';
 import { auth, database } from '@/lib/firebase';
 import { checkWin, generateCard, isValidCard } from '@/lib/gameLogic';
 import { BingoItem, Game } from '@/types';
@@ -46,27 +47,41 @@ export default function GamePage({ params }: { params: { id: string } }) {
     };
   }, [params.id, user, router]);
 
-  const handleToggleSquare = useCallback((index: number) => {
-    if (!user || !game || !isValidCard(game.card)) return;
-
-    const newCard = [...game.card];
-    newCard[index] = { ...newCard[index], isMarked: !newCard[index].isMarked };
-    const newHasWon = checkWin(newCard);
-
-    const updatedGame = {
-      ...game,
-      card: newCard,
-      hasWon: newHasWon,
-    };
-
-    set(ref(database, `games/${params.id}`), updatedGame)
-      .then(() => {
-        console.log('Game updated successfully');
-      })
-      .catch((error) => {
-        console.error('Error updating game:', error);
-      });
-  }, [game, user, params.id]);
+  const handleToggleSquare = useCallback((index: number, imageUrl: string) => {
+		if (!user || !game || !isValidCard(game.card)) return;
+	
+		const currentSquare = game.card[index];
+		if (currentSquare.isMarked && currentSquare.markedBy !== user.uid) {
+			return;
+		}
+	
+		const newCard = [...game.card];
+		newCard[index] = { 
+			...newCard[index], 
+			isMarked: true,
+			markedBy: user.uid,
+			imageUrl: imageUrl
+		};
+		const newHasWon = checkWin(newCard, user.uid);
+	
+		const updatedGame: Partial<Game> = {
+			...game,
+			card: newCard,
+			hasWon: newHasWon,
+		};
+	
+		if (newHasWon) {
+			updatedGame.winner = user.uid;
+		}
+	
+		set(ref(database, `games/${params.id}`), updatedGame)
+			.then(() => {
+				console.log('Game updated successfully');
+			})
+			.catch((error) => {
+				console.error('Error updating game:', error);
+			});
+	}, [game, user, params.id]);
 
   const handleLeaveGame = useCallback(() => {
     if (!user || !game) return;
@@ -101,21 +116,24 @@ export default function GamePage({ params }: { params: { id: string } }) {
     }
   }, [game, user, params.id, router]);
 
-  if (loading || !game) {
+  if (loading || !game || !user) {
     return <div>Loading...</div>;
   }
 
   return (
-    <div className="flex flex-col items-center p-4 bg-black min-h-screen">
+    <div className="flex flex-col items-center p-4 bg-black h-auto">
       <h1 className="text-3xl font-bold mb-6 text-white">{game.name}</h1>
-      <BingoCard card={game.card} onToggleSquare={handleToggleSquare} />
+      <BingoCard card={game.card} onToggleSquare={handleToggleSquare} players={game.players} currentPlayerId={user.uid} />
       <button
         onClick={handleLeaveGame}
         className="mt-4 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
       >
         Leave Game
       </button>
-      {game.hasWon && <h2 className="text-2xl font-bold mt-4 text-white">BINGO! You won!</h2>}
+      {game.hasWon && <h2 className="text-2xl font-bold mt-4 text-white">
+        {game.winner === user.uid ? 'You won!' : `${game.players[game.winner!]?.name} won!`}
+      </h2>}
+			<PlayerList players={game.players} currentPlayerId={user.uid} />
     </div>
   );
 }

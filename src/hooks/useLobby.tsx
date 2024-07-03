@@ -1,7 +1,7 @@
 import { auth, database } from '@/lib/firebase';
 import { generateCard } from '@/lib/gameLogic';
-import { Game } from '@/types';
-import { onValue, push, ref, remove, set } from 'firebase/database';
+import { Game, Player } from '@/types';
+import { get, onValue, push, ref, remove, set } from 'firebase/database';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -46,6 +46,24 @@ export function useLobby() {
     };
   }, [user]);
 
+	function getRandomColor(): string {
+    const r = Math.floor(Math.random() * 256);
+    const g = Math.floor(Math.random() * 256);
+    const b = Math.floor(Math.random() * 256);
+    return `rgb(${r},${g},${b})`;
+	}
+
+	function getUniqueColor(existingColors: string[]): string {
+			let newColor = getRandomColor();
+
+			while (existingColors.includes(newColor)) {
+					newColor = getRandomColor();
+			}
+
+			existingColors.push(newColor);
+			return newColor;
+}
+
   const createGame = (gameName: string) => {
     if (!user) return;
     const gamesRef = ref(database, 'games');
@@ -59,7 +77,11 @@ export function useLobby() {
       name: gameName,
       createdBy: user.uid,
       players: {
-        [user.uid]: user.displayName,
+        [user.uid]: {
+					id: user.uid,
+					name: user.displayName || 'Anonymous',
+					color: getUniqueColor([]),
+				},
       },
       card: generateCard(),
       hasWon: false,
@@ -75,17 +97,33 @@ export function useLobby() {
   };
 
   const joinGame = (gameId: string) => {
-    if (!user) return;
-    const gameRef = ref(database, `games/${gameId}/players/${user.uid}`);
-    set(gameRef, user.displayName)
-      .then(() => {
-        console.log('Joined game:', gameId);
-        router.push(`/game/${gameId}`);
-      })
-      .catch((error) => {
-        console.error('Error joining game:', error);
-      });
-  };
+		if (!user) return;
+		const gameRef = ref(database, `games/${gameId}`);
+		get(gameRef).then((snapshot: any) => {
+			if (snapshot.exists()) {
+				const gameData = snapshot.val();
+				const existingColors = Object.values(gameData.players).map((p: any) => p.color);
+				const newColor = getUniqueColor(existingColors);
+				const playerData: Player = {
+					id: user.uid,
+					name: user.displayName || 'Anonymous',
+					color: newColor,
+				};
+				set(ref(database, `games/${gameId}/players/${user.uid}`), playerData)
+					.then(() => {
+						console.log('Joined game:', gameId);
+						router.push(`/game/${gameId}`);
+					})
+					.catch((error) => {
+						console.error('Error joining game:', error);
+					});
+			} else {
+				console.error('Game not found');
+			}
+		}).catch((error: any) => {
+			console.error('Error fetching game data:', error);
+		});
+	};
 
   const deleteGame = (gameId: string) => {
     if (!user) return;
